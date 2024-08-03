@@ -1,6 +1,4 @@
-const { Client, GatewayIntentBits } = require('discord.js');
-const fs = require('fs');
-const path = require('path');
+const { Client, GatewayIntentBits, EmbedBuilder, PermissionsBitField } = require('discord.js');
 
 // Initialize the Discord client
 const client = new Client({
@@ -8,87 +6,78 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers,
   ],
 });
 
-// Function to format the current timestamp
-const getTimestamp = () => {
-  const now = new Date();
-  const time = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`; // Simple time format
-  const date = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear().toString().slice(-2)}`; // DD/MM/YY
-  return `${time} ${date}`;
-};
+// Your bot token
+const BOT_TOKEN = "ENTER_YOUR_TOKEN";
 
-// Function to log messages to a file
-const logToFile = (user, action) => {
-  const timestamp = getTimestamp();
-  const logMessage = `[${user}] - [${action}] - [${timestamp}]`;
-
-  fs.appendFile(path.join(__dirname, 'logs.txt'), logMessage + '\n', (err) => {
-    if (err) {
-      console.error('Failed to write to log file:', err);
-    }
-  });
+// Utility function to check if user has admin role
+const isAdmin = (member) => {
+  // Check if the member has the 'ADMINISTRATOR' permission
+  return member.permissions.has(PermissionsBitField.Flags.Administrator);
 };
 
 // Log when the bot starts and connects to Discord
 client.once('ready', () => {
-  logToFile('Bot', 'Connected to Discord');
   console.log(`Logged in as ${client.user.tag}!`);
 });
 
 client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
+  if (!interaction.isCommand()) return;
 
-  let actionMessage = `Command ${interaction.commandName} used by ${interaction.user.tag}`;
+  const { commandName, options, member } = interaction;
 
-  if (interaction.commandName === 'ping') {
-    await interaction.reply('Pong!');
-    actionMessage += ' - Replied with Pong!';
+  // Check if the user has admin permissions
+  if (!isAdmin(member)) {
+    await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+    return;
   }
 
-  if (interaction.commandName === 'hint') {
-    const level = interaction.options.get('level').value;
-    actionMessage += ` - Hint requested with level: ${level}`;
+  // Handle admin commands
+  if (commandName === 'welcome') {
+    const user = options.getUser('user');
+    if (user) {
+      try {
+        const welcomeEmbed = new EmbedBuilder()
+          .setColor('#0099ff')
+          .setTitle('Welcome!')
+          .setDescription(`Hello ${user.tag}, welcome to the server! We're glad to have you here.`)
+          .setThumbnail(user.displayAvatarURL())
+          .setFooter({ text: 'Enjoy your stay!' });
 
-    if (level == 1) {
-      await interaction.reply('This is the hint for level 1');
-    } else if (level == 2) {
-      await interaction.reply('This is the hint for level 2');
-    } else if (level == 3) {
-      await interaction.reply('This is the hint for level 3');
-    } else if (level == 4) {
-      await interaction.reply('This is the hint for level 4');
-    } else if (level == 5) {
-      await interaction.reply('This is the hint for level 5');
+        await interaction.reply({ embeds: [welcomeEmbed] });
+      } catch (error) {
+        console.error('Error sending welcome message:', error);
+        await interaction.reply('There was an error trying to send the welcome message.');
+      }
+    } else {
+      await interaction.reply('Could not find the specified user.');
     }
   }
-
-  logToFile(interaction.user.tag, actionMessage);
 });
 
-client.on('messageCreate', (message) => {
+client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
-  let actionMessage = `Message from ${message.author.tag}: ${message.content}`;
-
-  if (message.author.username === 'cvesu1' && message.content.toLowerCase() === 'clear') {
-    message.channel.bulkDelete(100).catch(err => {
-      console.error(err);
-      logToFile(message.author.tag, `Failed to clear messages: ${err}`);
-    });
-    actionMessage += ' - Attempted to clear messages';
+  // Clear messages logic for specific user
+  const CLEAR_USER_ID = '881410149716201513';
+  if (message.author.id === CLEAR_USER_ID && message.content.toLowerCase() === 'clear') {
+    try {
+      const fetchedMessages = await message.channel.messages.fetch({ limit: 100 });
+      await message.channel.bulkDelete(fetchedMessages);
+    } catch (err) {
+      console.error('Failed to clear messages:', err);
+    }
+    return;
   }
 
   if (message.content.toLowerCase().includes('bharat')) {
     message.channel.send({
       content: 'Jai Hind!',
     });
-    actionMessage += ' - Sent Jai Hind!';
   }
-
-  logToFile(message.author.tag, actionMessage);
 });
 
-// Replace 'YOUR_BOT_TOKEN_HERE' with your actual bot token
-client.login("TOKEN");
+client.login(BOT_TOKEN);
